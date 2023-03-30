@@ -1,15 +1,11 @@
 """
 Shows all content on the bkmks database.
 """
-import os
-import subprocess
-
+import click
 import snoop
 from blessed import Terminal
 from mysql.connector import Error, connect
 from snoop import pp
-
-from bkmk.configs.config import tput_config
 
 
 def type_watch(source, value):
@@ -19,14 +15,22 @@ def type_watch(source, value):
 snoop.install(watch_extras=[type_watch])
 
 
+@click.command()
+@click.option("-n", "--number", type=int)
 # @snoop
-def all():
+def all(number):
     """
-    I'm trying again with the 'blessed' library, and I like the results.
-    Using Tput for some time prepared me for this.
+    Invoked as 'bkall'. With no arguments, it prints all
+    content on the database.\n
+    -n   Number of latest entries to show. Prints 'n' amount of new entries, thusly:\n
+    bkall -n 4
     """
+
     term = Terminal()
+
     query = "SELECT * FROM bkmks"
+    if number:
+        query = f"SELECT * FROM bkmks ORDER BY id DESC LIMIT {number}"
     try:
         conn = connect(host="localhost", user="mic", password="xxxx", database="bkmks")
         cur = conn.cursor()
