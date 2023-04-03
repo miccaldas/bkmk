@@ -20,10 +20,11 @@ snoop.install(watch_extras=[type_watch])
 # @snoop
 def all(number):
     """
-    Invoked as 'bkall'. With no arguments, it prints all
+    Invoked as **bkall**. With no arguments, it prints all
     content on the database.\n
-    -n   Number of latest entries to show. Prints 'n' amount of new entries, thusly:\n
-    bkall -n 4
+    **Options:**\n
+    -n  Number of latest entries to show. Prints 'n' amount of new entries, thusly:\n
+    **bkall -n 4**
     """
 
     term = Terminal()
@@ -52,9 +53,7 @@ def all(number):
             term.bold(record[5]),
             term.bold(record[6]),
             term.bold(record[7].strftime("%d-%m-%Y_%H:%M")),
-            term.bold(
-                "--------------------------------------------------------------------"
-            ),
+            term.bold("--------------------------------------------------------------------"),
         )
 
         for line in record:

@@ -21,12 +21,12 @@ snoop.install(watch_extras=[type_watch])
 # @snoop
 def update(ident, column, update):
     """
-    The function is called 'bkupdt' and has three options:\n
-    1. 'ident'. Integer with the id value of the line we want
-       to update.\n
-    2. 'column'. String of the column's name we want to update.\n
-    3. 'update'. Text that you want to change. This comes as a prompt,
-       so just insert the other options and press Enter to access it.
+    Called with **bkupdt**.\n
+    **Options:**\n
+    -i  Integer with the id value of the line we want to update.\n
+    -c  String of the column's name we want to update.\n
+    -u  Text that you want to change. it's a prompt. So just insert the other options and press
+            *Enter* to access it.
     """
 
     try:

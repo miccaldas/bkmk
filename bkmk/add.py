@@ -23,15 +23,13 @@ snoop.install(watch_extras=[type_watch])
 def add(title, comment, link, keywords):
     """
     All information is gathered through cli options.
-    The command is 'bkadd' and it's universal.
-    Options are:\n
-    1. '-t/--title' Insert title of bookmark.\n
-    2. '-c/--comment' Insert comment to bookmark. The
-       program will automatically open a prompt for you
-       to write. Just enter all other values, press Enter
-       and the prompt will appear.\n
-    3. '-l/--link' Insert URL of bookmark.\n
-    4. '-k/--keywords' Insert up to three keywords.
+    The command is **bkadd**.\n
+    **Options:**\n
+    -t  Insert title of bookmark.\n
+    -c  Insert comment to bookmark. The program will automatically open a prompt for you to
+          write. Just enter all other values, press *Enter* and the prompt will appear.\n
+    -l  Insert URL of bookmark.\n
+    -k  Insert up to three keywords.
     """
 
     query = "INSERT INTO bkmks (title, comment, link, k1, k2, k3) VALUES (%s, %s, %s, %s, %s, %s)"

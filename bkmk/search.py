@@ -199,9 +199,9 @@ def show_results():
 def db_call(srch):
     """
     Accepts only one string which is the search query.\n
-    Doesn't have options so use only the 'bksrch' command
+    Doesn't have options so use only the **bksrch** command
     followed by the string query.\n
-    Outputs a pickle file, 'srch.bin' and calls the 'show_results'
+    Outputs a pickle file, *srch.bin* and calls the *show_results*
     function.
     """
 
@@ -222,6 +222,9 @@ def db_call(srch):
     finally:
         if conn:
             conn.close()
+
+    if records == []:
+        raise SystemExit
 
     with open(f"{bkmkfldr}/srch.bin", "wb") as f:
         pickle.dump(records, f)

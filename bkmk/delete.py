@@ -1,9 +1,5 @@
 """
 Command line version of the delete function bookmarks.
-Called by 'bkdlt' command.
-The reason for the line breaks in the function docstring
-is due to the fact that Click rearranges you text when
-putting i in the 'help' option.
 """
 import click
 import snoop
@@ -25,17 +21,21 @@ def delete(dlt):
     """
     Function that deletes one, several or
     range of entries in the 'bkmks' database.\n
-    You can call it with 'bkdlt', and use it in the following form:\n
-    1. Delete non sequential entries. Surround the ids with quotation
-       marks and separate them with a comma:\n
-       bkdlt '435,436', for example.
-    \n
-    2. Delete sequential entries. Envelop first and last ids with quotation
-       marks and separate them with a dash:\n
-       bkdlt '437-439'.\n
+    You can call it with **bkdlt**, and use it in the following form:\n
+    1. **Delete non sequential entries**. Surround the ids with quotation
+       marks and separate them with a comma::
+
+           bkdlt '435,436'
+
+    2. **Delete sequential entries**. Envelop first and last ids with quotation
+       marks and separate them with a dash::
+
+           bkdlt '437-439'
+
        You may include spaces, but they'll be deleted by the application.\n
-    3. Delete single entry. Write the id surrounded by quotation marks:\n
-       bkdlt 66
+    3. **Delete single entry**. Write the id surrounded by quotation marks::
+
+          bkdlt 66
     """
 
     split_lst = []

@@ -1,0 +1,374 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>bkmk.search &#8212; Bookmarks 1.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css" />
+    <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+    <script src="../../_static/doctools.js"></script>
+    <script src="../../_static/sphinx_highlight.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for bkmk.search</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Command line implementation of the &#39;search&#39; function in &#39;bkmks&#39;.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">pickle</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+
+<span class="kn">import</span> <span class="nn">click</span>
+<span class="kn">import</span> <span class="nn">snoop</span>
+<span class="kn">from</span> <span class="nn">mysql.connector</span> <span class="kn">import</span> <span class="n">Error</span><span class="p">,</span> <span class="n">connect</span>
+<span class="kn">from</span> <span class="nn">snoop</span> <span class="kn">import</span> <span class="n">pp</span>
+
+<span class="kn">from</span> <span class="nn">bkmk.configs.config</span> <span class="kn">import</span> <span class="n">tput_config</span>
+
+
+<span class="k">def</span> <span class="nf">type_watch</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+    <span class="k">return</span> <span class="s2">&quot;type(</span><span class="si">{}</span><span class="s2">)&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">source</span><span class="p">),</span> <span class="nb">type</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+
+<span class="n">snoop</span><span class="o">.</span><span class="n">install</span><span class="p">(</span><span class="n">watch_extras</span><span class="o">=</span><span class="p">[</span><span class="n">type_watch</span><span class="p">])</span>
+
+
+<div class="viewcode-block" id="show_results"><a class="viewcode-back" href="../../all_commands.html#bkmk.search.show_results">[docs]</a><span class="nd">@snoop</span>
+<span class="k">def</span> <span class="nf">show_results</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Outputs the search query results as ascii tables.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">cnf</span> <span class="o">=</span> <span class="n">tput_config</span><span class="p">()</span>
+    <span class="n">bkmkfldr</span> <span class="o">=</span> <span class="s2">&quot;/home/mic/python/bkmk/bkmk&quot;</span>
+
+    <span class="n">entries</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">bkmkfldr</span><span class="si">}</span><span class="s2">/srch.bin&quot;</span><span class="p">,</span> <span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">entries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pickle</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">))</span>
+            <span class="k">except</span> <span class="ne">EOFError</span><span class="p">:</span>
+                <span class="k">break</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">sublst</span> <span class="ow">in</span> <span class="n">entries</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">sublst</span><span class="p">]</span>
+
+    <span class="n">title_str</span> <span class="o">=</span> <span class="s2">&quot;SEARCH RESULTS&quot;</span>
+    <span class="n">title_width</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span>
+        <span class="n">cnf</span><span class="p">[</span><span class="s2">&quot;init_width&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">cnf</span><span class="p">[</span><span class="s2">&quot;separator&quot;</span><span class="p">])</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span> <span class="o">-</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">title_str</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="p">)</span>
+    <span class="c1"># Here we needed to do three things; one, set id value to string as we&#39;ll its len()</span>
+    <span class="c1"># value and ints don&#39;t have length; delete quotation marks from comments and title,</span>
+    <span class="c1"># as bash is finicky displaying it, and three, turn the datetime value to a string,</span>
+    <span class="c1"># so we can access its len() value.</span>
+    <span class="n">vals</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">(</span>
+            <span class="nb">str</span><span class="p">(</span><span class="n">a</span><span class="p">),</span>
+            <span class="n">b</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+            <span class="n">c</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+            <span class="n">d</span><span class="p">,</span>
+            <span class="n">e</span><span class="p">,</span>
+            <span class="n">f</span><span class="p">,</span>
+            <span class="n">g</span><span class="p">,</span>
+            <span class="n">h</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%d</span><span class="s2">-%m-%Y_%H:%M&quot;</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">g</span><span class="p">,</span> <span class="n">h</span> <span class="ow">in</span> <span class="n">results</span>
+    <span class="p">]</span>
+    <span class="n">lns_val</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">a</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">b</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">c</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">d</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">e</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">f</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">g</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">h</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">g</span><span class="p">,</span> <span class="n">h</span> <span class="ow">in</span> <span class="n">vals</span>
+    <span class="p">]</span>
+    <span class="n">lens_val</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">lns_val</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">t</span><span class="p">]</span>
+
+    <span class="n">names</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="s2">&quot;comment&quot;</span><span class="p">,</span> <span class="s2">&quot;link&quot;</span><span class="p">,</span> <span class="s2">&quot;k1&quot;</span><span class="p">,</span> <span class="s2">&quot;k2&quot;</span><span class="p">,</span> <span class="s2">&quot;k3&quot;</span><span class="p">,</span> <span class="s2">&quot;tempo&quot;</span><span class="p">]</span>
+    <span class="n">lens_nms</span> <span class="o">=</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">nm</span><span class="p">)</span> <span class="k">for</span> <span class="n">nm</span> <span class="ow">in</span> <span class="n">names</span><span class="p">]</span>
+
+    <span class="n">values</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">vals</span><span class="p">:</span>
+        <span class="n">values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="n">v</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>
+                <span class="p">(</span><span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="n">v</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span>
+                <span class="p">(</span><span class="s2">&quot;comment&quot;</span><span class="p">,</span> <span class="n">v</span><span class="p">[</span><span class="mi">2</span><span class="p">]),</span>
+                <span class="p">(</span><span class="s2">&quot;link&quot;</span><span class="p">,</span> <span class="n">v</span><span class="p">[</span><span class="mi">3</span><span class="p">]),</span>
+                <span class="p">(</span><span class="s2">&quot;k1&quot;</span><span class="p">,</span> <span class="n">v</span><span class="p">[</span><span class="mi">4</span><span class="p">]),</span>
+                <span class="p">(</span><span class="s2">&quot;k2&quot;</span><span class="p">,</span> <span class="n">v</span><span class="p">[</span><span class="mi">5</span><span class="p">]),</span>
+                <span class="p">(</span><span class="s2">&quot;k3&quot;</span><span class="p">,</span> <span class="n">v</span><span class="p">[</span><span class="mi">6</span><span class="p">]),</span>
+                <span class="p">(</span><span class="s2">&quot;tempo&quot;</span><span class="p">,</span> <span class="n">v</span><span class="p">[</span><span class="mi">7</span><span class="p">]),</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
+
+    <span class="n">hi_ln_val</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">lens_val</span><span class="p">)</span>
+    <span class="n">hi_ln_nms</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">lens_nms</span><span class="p">)</span>
+    <span class="n">vh</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hi_ln_val</span> <span class="o">+</span> <span class="n">hi_ln_nms</span> <span class="o">+</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="n">sep</span> <span class="o">=</span> <span class="s2">&quot;-&quot;</span>
+    <span class="n">traces</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">sep</span> <span class="o">*</span> <span class="n">vh</span><span class="p">)</span>
+    <span class="n">ntraces</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;+-</span><span class="si">{</span><span class="n">traces</span><span class="si">}</span><span class="s2">-+&quot;</span>
+    <span class="n">ud_len</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">ntraces</span><span class="p">)</span>
+
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">bkmkfldr</span><span class="si">}</span><span class="s2">/see_results.bash&quot;</span><span class="p">,</span> <span class="s2">&quot;w&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;#!/usr/bin/env bash</span><span class="se">\n\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;tput clear</span><span class="se">\n\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="n">cnf</span><span class="p">[</span><span class="s1">&#39;init_height&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> &quot;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">title_width</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput setaf </span><span class="si">{</span><span class="n">cnf</span><span class="p">[</span><span class="s1">&#39;title_color&#39;</span><span class="p">]</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;tput bold</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;echo &quot;</span><span class="si">{</span><span class="n">title_str</span><span class="si">}</span><span class="s1">&quot;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;tput sgr0</span><span class="se">\n\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="n">cnf</span><span class="p">[</span><span class="s1">&#39;separator_height&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">cnf</span><span class="p">[</span><span class="s1">&#39;init_width&#39;</span><span class="p">]</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;echo &#39;</span><span class="si">{</span><span class="n">cnf</span><span class="p">[</span><span class="s1">&#39;separator&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&#39;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">table_width</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span>
+            <span class="n">cnf</span><span class="p">[</span><span class="s2">&quot;init_width&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">cnf</span><span class="p">[</span><span class="s2">&quot;separator&quot;</span><span class="p">])</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span> <span class="o">-</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ntraces</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">first_item_height</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">cnf</span><span class="p">[</span><span class="s2">&quot;separator_height&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="mi">4</span><span class="p">)</span>
+        <span class="n">rng_values_lst</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">))</span>
+        <span class="n">rng_lst</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="p">)</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rng_values_lst</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rng_lst</span><span class="p">:</span>
+            <span class="n">n_id_len0</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hi_ln_nms</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]))</span>
+            <span class="n">v_id_len0</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hi_ln_val</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">]))</span>
+            <span class="n">space_id_n0</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">&quot; &quot;</span> <span class="o">*</span> <span class="n">n_id_len0</span><span class="p">)</span>
+            <span class="n">space_id_v0</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">&quot; &quot;</span> <span class="o">*</span> <span class="n">v_id_len0</span><span class="p">)</span>
+            <span class="n">n_title_len0</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hi_ln_nms</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">]))</span>
+            <span class="n">v_title_len0</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hi_ln_val</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">]))</span>
+            <span class="n">space_title_n0</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">&quot; &quot;</span> <span class="o">*</span> <span class="n">n_title_len0</span><span class="p">)</span>
+            <span class="n">space_title_v0</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">&quot; &quot;</span> <span class="o">*</span> <span class="n">v_title_len0</span><span class="p">)</span>
+            <span class="n">n_comment_len0</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hi_ln_nms</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">2</span><span class="p">][</span><span class="mi">0</span><span class="p">]))</span>
+            <span class="n">v_comment_len0</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hi_ln_val</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">2</span><span class="p">][</span><span class="mi">1</span><span class="p">]))</span>
+            <span class="n">space_comment_n0</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">&quot; &quot;</span> <span class="o">*</span> <span class="n">n_comment_len0</span><span class="p">)</span>
+            <span class="n">space_comment_v0</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">&quot; &quot;</span> <span class="o">*</span> <span class="n">v_comment_len0</span><span class="p">)</span>
+            <span class="n">n_link_len0</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hi_ln_nms</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">3</span><span class="p">][</span><span class="mi">0</span><span class="p">]))</span>
+            <span class="n">v_link_len0</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hi_ln_val</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">3</span><span class="p">][</span><span class="mi">1</span><span class="p">]))</span>
+            <span class="n">space_link_n0</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">&quot; &quot;</span> <span class="o">*</span> <span class="n">n_link_len0</span><span class="p">)</span>
+            <span class="n">space_link_v0</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">&quot; &quot;</span> <span class="o">*</span> <span class="n">v_link_len0</span><span class="p">)</span>
+            <span class="n">n_k1_len0</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hi_ln_nms</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">4</span><span class="p">][</span><span class="mi">0</span><span class="p">]))</span>
+            <span class="n">v_k1_len0</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hi_ln_val</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">4</span><span class="p">][</span><span class="mi">1</span><span class="p">]))</span>
+            <span class="n">space_k1_n0</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">&quot; &quot;</span> <span class="o">*</span> <span class="n">n_k1_len0</span><span class="p">)</span>
+            <span class="n">space_k1_v0</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">&quot; &quot;</span> <span class="o">*</span> <span class="n">v_k1_len0</span><span class="p">)</span>
+            <span class="n">n_k2_len0</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hi_ln_nms</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">5</span><span class="p">][</span><span class="mi">0</span><span class="p">]))</span>
+            <span class="n">v_k2_len0</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hi_ln_val</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">5</span><span class="p">][</span><span class="mi">1</span><span class="p">]))</span>
+            <span class="n">space_k2_n0</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">&quot; &quot;</span> <span class="o">*</span> <span class="n">n_k2_len0</span><span class="p">)</span>
+            <span class="n">space_k2_v0</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">&quot; &quot;</span> <span class="o">*</span> <span class="n">v_k2_len0</span><span class="p">)</span>
+            <span class="n">n_k3_len0</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hi_ln_nms</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">6</span><span class="p">][</span><span class="mi">0</span><span class="p">]))</span>
+            <span class="n">v_k3_len0</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hi_ln_val</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">6</span><span class="p">][</span><span class="mi">1</span><span class="p">]))</span>
+            <span class="n">space_k3_n0</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">&quot; &quot;</span> <span class="o">*</span> <span class="n">n_k3_len0</span><span class="p">)</span>
+            <span class="n">space_k3_v0</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">&quot; &quot;</span> <span class="o">*</span> <span class="n">v_k3_len0</span><span class="p">)</span>
+            <span class="n">n_tempo_len0</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hi_ln_nms</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">7</span><span class="p">][</span><span class="mi">0</span><span class="p">]))</span>
+            <span class="n">v_tempo_len0</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hi_ln_val</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">7</span><span class="p">][</span><span class="mi">1</span><span class="p">]))</span>
+            <span class="n">space_tempo_n0</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">&quot; &quot;</span> <span class="o">*</span> <span class="n">n_tempo_len0</span><span class="p">)</span>
+            <span class="n">space_tempo_v0</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">&quot; &quot;</span> <span class="o">*</span> <span class="n">v_tempo_len0</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">r</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="n">cnf</span><span class="p">[</span><span class="s1">&#39;separator_height&#39;</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">3</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table_width</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;echo &#39;</span><span class="si">{</span><span class="n">ntraces</span><span class="si">}</span><span class="s2">&#39;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="n">first_item_height</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table_width</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;echo &#39;| </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}{</span><span class="n">space_id_n0</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}{</span><span class="n">space_id_v0</span><span class="si">}</span><span class="s2"> |&#39;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="n">first_item_height</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table_width</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;echo &#39;| </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}{</span><span class="n">space_title_n0</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}{</span><span class="n">space_title_v0</span><span class="si">}</span><span class="s2"> |&#39;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="n">first_item_height</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table_width</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;echo &#39;| </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">2</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}{</span><span class="n">space_comment_n0</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">2</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}{</span><span class="n">space_comment_v0</span><span class="si">}</span><span class="s2"> |&#39;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="n">first_item_height</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">3</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table_width</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;echo &#39;| </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">3</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}{</span><span class="n">space_link_n0</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">3</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}{</span><span class="n">space_link_v0</span><span class="si">}</span><span class="s2"> |&#39;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="n">first_item_height</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">4</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table_width</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;echo &#39;| </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">4</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}{</span><span class="n">space_k1_n0</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">4</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}{</span><span class="n">space_k1_v0</span><span class="si">}</span><span class="s2"> |&#39;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="n">first_item_height</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">5</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table_width</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;echo &#39;| </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">5</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}{</span><span class="n">space_k2_n0</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">5</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}{</span><span class="n">space_k2_v0</span><span class="si">}</span><span class="s2"> |&#39;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="n">first_item_height</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">6</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table_width</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;echo &#39;| </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">6</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}{</span><span class="n">space_k3_n0</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">6</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}{</span><span class="n">space_k3_v0</span><span class="si">}</span><span class="s2"> |&#39;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="n">first_item_height</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">7</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table_width</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;echo &#39;| </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">7</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}{</span><span class="n">space_tempo_n0</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">7</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}{</span><span class="n">space_tempo_v0</span><span class="si">}</span><span class="s2"> |&#39;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="n">first_item_height</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">8</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table_width</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;echo &#39;</span><span class="si">{</span><span class="n">ntraces</span><span class="si">}</span><span class="s2">&#39;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="n">first_item_height</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">9</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table_width</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;echo &#39; &#39;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">pp</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="n">first_item_height</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">9</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">r</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table_width</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">))</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;echo &#39;</span><span class="si">{</span><span class="n">ntraces</span><span class="si">}</span><span class="s2">&#39;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="n">first_item_height</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">9</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">r</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table_width</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;echo &#39;| </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}{</span><span class="n">space_id_n0</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}{</span><span class="n">space_id_v0</span><span class="si">}</span><span class="s2"> |&#39;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="n">first_item_height</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">9</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">r</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">3</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table_width</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;echo &#39;| </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}{</span><span class="n">space_title_n0</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}{</span><span class="n">space_title_v0</span><span class="si">}</span><span class="s2"> |&#39;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="n">first_item_height</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">9</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">r</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">4</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table_width</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;echo &#39;| </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">2</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}{</span><span class="n">space_comment_n0</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">2</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}{</span><span class="n">space_comment_v0</span><span class="si">}</span><span class="s2"> |&#39;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="n">first_item_height</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">9</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">r</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">5</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table_width</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;echo &#39;| </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">3</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}{</span><span class="n">space_link_n0</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">3</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}{</span><span class="n">space_link_v0</span><span class="si">}</span><span class="s2"> |&#39;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="n">first_item_height</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">9</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">r</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">6</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table_width</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;echo &#39;| </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">4</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}{</span><span class="n">space_k1_n0</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">4</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}{</span><span class="n">space_k1_v0</span><span class="si">}</span><span class="s2"> |&#39;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="n">first_item_height</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">9</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">r</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">7</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table_width</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;echo &#39;| </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">5</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}{</span><span class="n">space_k2_n0</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">5</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}{</span><span class="n">space_k2_v0</span><span class="si">}</span><span class="s2"> |&#39;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="n">first_item_height</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">9</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">r</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">8</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table_width</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;echo &#39;| </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">6</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}{</span><span class="n">space_k3_n0</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">6</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}{</span><span class="n">space_k3_v0</span><span class="si">}</span><span class="s2"> |&#39;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="n">first_item_height</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">9</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">r</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">9</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table_width</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;echo &#39;| </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">7</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}{</span><span class="n">space_tempo_n0</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="n">r</span><span class="p">][</span><span class="mi">7</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}{</span><span class="n">space_tempo_v0</span><span class="si">}</span><span class="s2"> |&#39;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="n">first_item_height</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">9</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">r</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">10</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table_width</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;echo &#39;</span><span class="si">{</span><span class="n">ntraces</span><span class="si">}</span><span class="s2">&#39;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="n">first_item_height</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">9</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">r</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">11</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table_width</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;echo &#39; &#39;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tput cup </span><span class="si">{</span><span class="mi">12</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nb">len</span><span class="p">(</span><span class="n">rng_lst</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">13</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table_width</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;read -p &#39;Press any key to exit. &#39; choice</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;echo &quot;$</span><span class="si">{choice}</span><span class="s1">&quot; &gt; /dev/null</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;tput clear</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;tput sgr0</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;tput rc&quot;</span><span class="p">)</span>
+
+    <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;sudo chmod +x </span><span class="si">{</span><span class="n">bkmkfldr</span><span class="si">}</span><span class="s2">/see_results.bash&quot;</span><span class="p">,</span> <span class="n">shell</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">bkmkfldr</span><span class="si">}</span><span class="s2">/see_results.bash&quot;</span><span class="p">,</span> <span class="n">shell</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+
+<span class="nd">@click</span><span class="o">.</span><span class="n">command</span><span class="p">()</span>
+<span class="nd">@click</span><span class="o">.</span><span class="n">argument</span><span class="p">(</span><span class="s2">&quot;srch&quot;</span><span class="p">)</span>
+<span class="nd">@snoop</span>
+<span class="k">def</span> <span class="nf">db_call</span><span class="p">(</span><span class="n">srch</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Accepts only one string which is the search query.\n</span>
+<span class="sd">    Doesn&#39;t have options so use only the **bksrch** command</span>
+<span class="sd">    followed by the string query.\n</span>
+<span class="sd">    Outputs a pickle file, *srch.bin* and calls the *show_results*</span>
+<span class="sd">    function.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">bkmkfldr</span> <span class="o">=</span> <span class="s2">&quot;/home/mic/python/bkmk/bkmk&quot;</span>
+
+    <span class="n">q1</span> <span class="o">=</span> <span class="s2">&quot;SELECT id, title, comment, link, k1, k2, k3, tempo &quot;</span>
+    <span class="n">q2</span> <span class="o">=</span> <span class="s2">&quot;FROM bkmks WHERE MATCH(title, comment, k1, k2, k3) &quot;</span>
+    <span class="n">q3</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;AGAINST(&#39;</span><span class="si">{</span><span class="n">srch</span><span class="si">}</span><span class="s2">&#39;)&quot;</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">conn</span> <span class="o">=</span> <span class="n">connect</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="s2">&quot;localhost&quot;</span><span class="p">,</span> <span class="n">user</span><span class="o">=</span><span class="s2">&quot;mic&quot;</span><span class="p">,</span> <span class="n">password</span><span class="o">=</span><span class="s2">&quot;xxxx&quot;</span><span class="p">,</span> <span class="n">database</span><span class="o">=</span><span class="s2">&quot;bkmks&quot;</span><span class="p">)</span>
+        <span class="n">cur</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+        <span class="n">query</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">q1</span><span class="si">}{</span><span class="n">q2</span><span class="si">}{</span><span class="n">q3</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+        <span class="n">records</span> <span class="o">=</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
+    <span class="k">except</span> <span class="n">Error</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Error while connecting to db&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+    <span class="k">finally</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">conn</span><span class="p">:</span>
+            <span class="n">conn</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">bkmkfldr</span><span class="si">}</span><span class="s2">/srch.bin&quot;</span><span class="p">,</span> <span class="s2">&quot;wb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="n">pickle</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">records</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
+
+    <span class="n">show_results</span><span class="p">()</span>
+
+    <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">bkmkfldr</span><span class="si">}</span><span class="s2">/srch.bin&quot;</span><span class="p">)</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">bkmkfldr</span><span class="si">}</span><span class="s2">/see_results.bash&quot;</span><span class="p">)</span>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">db_call</span><span class="p">()</span>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">Bookmarks</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../all_commands.html">Commands</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2023, mclds.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 6.1.3</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.13</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>
