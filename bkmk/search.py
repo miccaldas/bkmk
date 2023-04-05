@@ -20,7 +20,7 @@ def type_watch(source, value):
 snoop.install(watch_extras=[type_watch])
 
 
-@snoop
+# @snoop
 def show_results():
     """
     Outputs the search query results as ascii tables.
@@ -195,7 +195,7 @@ def show_results():
 
 @click.command()
 @click.argument("srch")
-@snoop
+# @snoop
 def db_call(srch):
     """
     Accepts only one string which is the search query.\n
