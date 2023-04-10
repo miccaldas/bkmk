@@ -9,7 +9,7 @@ from snoop import pp
 
 
 def type_watch(source, value):
-    return "type({})".format(source), type(value)
+    return f"type({source})", type(value)
 
 
 snoop.install(watch_extras=[type_watch])

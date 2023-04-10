@@ -6,18 +6,20 @@ import pickle
 import subprocess
 
 import click
-import snoop
+
+# import snoop
 from mysql.connector import Error, connect
-from snoop import pp
+
+# from snoop import pp
 
 from bkmk.configs.config import tput_config
 
 
-def type_watch(source, value):
-    return "type({})".format(source), type(value)
+# def type_watch(source, value):
+#     return f"type({source})", type(value)
 
 
-snoop.install(watch_extras=[type_watch])
+# snoop.install(watch_extras=[type_watch])
 
 
 # @snoop
@@ -159,7 +161,7 @@ def show_results():
                 f.write(f"tput cup {first_item_height + 9} {table_width}\n")
                 f.write("echo ' '\n")
             else:
-                f.write(pp(f"tput cup {first_item_height + 9 * r + 1} {table_width}\n"))
+                f.write(f"tput cup {first_item_height + 9 * r + 1} {table_width}\n")
                 f.write(f"echo '{ntraces}'\n")
                 f.write(f"tput cup {first_item_height + 9 * r + 2} {table_width}\n")
                 f.write(f"echo '| {values[r][0][0]}{space_id_n0} | {values[r][0][1]}{space_id_v0} |'\n")
