@@ -6,21 +6,22 @@ whatever module needs it.
 """
 import os
 import subprocess
-import snoop
-from snoop import pp
+
+# import snoop
+# from snoop import pp
 from dotenv import load_dotenv
 
 
-def type_watch(source, value):
-    return "type({})".format(source), type(value)
+# def type_watch(source, value):
+#     return "type({})".format(source), type(value)
 
 
-snoop.install(watch_extras=[type_watch])
+# snoop.install(watch_extras=[type_watch])
 
 load_dotenv()
 
 
-@snoop
+# @snoop
 def tput_config():
     """
     Configuration variables for Tput windows.
@@ -47,9 +48,7 @@ def tput_config():
     tputs["init_pos"] = init_pos
     tputs["separator_height"] = separator_height
     tputs["space_under_separator"] = space_under_separator
-    tputs[
-        "separator"
-    ] = "------------------------------ [X] ------------------------------"
+    tputs["separator"] = "------------------------------ [X] ------------------------------"
     tputs["title_color"] = 2
 
     return tputs
@@ -71,6 +70,7 @@ class Efs:
     other two start and stop
     the encryption in PWD_SEC_LOC
     """
+
     dec = os.getenv("PWD_SEC_LOC")
     enc = os.getenv("PWD_ENC_LOC")
     encfs_pwd = os.getenv("PWD_FLD_KEY")
@@ -78,7 +78,7 @@ class Efs:
     def __init__(self):
         pass
 
-    @snoop
+    # @snoop
     def create(self):
         """
         Creates a new fylesystem.
@@ -94,9 +94,9 @@ class Efs:
         # cmd = f'echo "Ih|%çe\`Vknu;)0AO_lLUT5iH-Gx^qo9j<3fm$>8d.7SY2" | encfs --stdinpass {enc} {dec}'
         subprocess.run(cmd, shell=True)
 
-    @snoop
+    # @snoop
     def mount(self):
-        """ 
+        """
         Mounts the encrypted folder back up.
         You'll see now files inside the folder.
         """
@@ -104,7 +104,7 @@ class Efs:
         cmd = f"echo '{Efs.encfs_pwd}' | encfs --stdinpass {Efs.enc} {Efs.dec}"
         subprocess.run(cmd, shell=True)
 
-    @snoop
+    # @snoop
     def unmount(self):
         """
         When unmounting, the 'pwd' folder will
